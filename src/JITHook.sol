@@ -22,13 +22,14 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
 import {Owned} from "solmate/src/auth/Owned.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title JITHook
  * @notice The main hook to facilitate JIT liquidity provision and yield farming
  * @author Yash Goyal & Naman Mohanani
  */
-contract JITHook is BaseHook, Owned {
+contract JITHook is BaseHook, Owned, ReentrancyGuard {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
     using BeforeSwapDeltaLibrary for BeforeSwapDelta;
@@ -194,7 +195,7 @@ contract JITHook is BaseHook, Owned {
     // TODO
     // key: currency0, currency1 => not deposited in external protocol because no one deposited it ?????
     // without key, what tokens will returned ?
-    function withdraw(Currency currency, uint256 amountToWithdraw) external {
+    function withdraw(Currency currency, uint256 amountToWithdraw) external nonReentrant {
         (, int256 price,,,) = priceFeeds[currency].latestRoundData();
         // govToken.burn(msg.sender, amountToWithdraw);
         uint256 tokenDecimals = ERC20(Currency.unwrap(currency)).decimals();
@@ -215,14 +216,12 @@ contract JITHook is BaseHook, Owned {
         govToken.burn(msg.sender, amountToWithdraw);
     }
 
+    // 
     function withdrawOptions(Currency currency) external view returns (uint256 maxWithdrawUSD) {
         (uint256 availableTokens,) = IStrategy(controller.getStrategyAddress(currentActiveStrategyId)).getBalance(
             Currency.unwrap(currency), address(0)
         );
         (, int256 price,,,) = priceFeeds[currency].latestRoundData();
-
-        // Calculate max USD value that can be withdrawn
-        // Convert token amount to USD value considering token decimals
         uint256 tokenDecimals = ERC20(Currency.unwrap(currency)).decimals();
         maxWithdrawUSD = (availableTokens * uint256(price)) / (10 ** tokenDecimals);
     }
